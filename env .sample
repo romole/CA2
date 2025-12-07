@@ -1,0 +1,14 @@
+DB_HOST=localhost
+DB_NAME=
+DB_USER=
+DB_PASS=
+
+# credenciales de email de la app
+EMAIL_APP_NAME=
+EMAIL_APP_DOMAIN=
+
+# servidor de correo que usa app
+EMAIL_HOST=
+EMAIL_PORT=
+EMAIL_USERNAME=
+EMAIL_PASSWORD=
