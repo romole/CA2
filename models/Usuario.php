@@ -29,7 +29,7 @@ class Usuario extends ActiveRecord
     $this->passwordCheck = $args['passwordCheck'] ?? ''; // para verificar
 
     $this->confirmadoTerminos = $args['confirmadoTerminos'] ?? 0;
-    $this->estadoCuenta = $args['estadoCuenta'] ?? 2;
+    $this->estadoCuenta = $args['estadoCuenta'] ?? 'pending';
     $this->confirmadaCuenta = $args['confirmadaCuenta'] ?? 0;
     $this->token = $args['token'] ?? '';
   }
@@ -72,12 +72,17 @@ class Usuario extends ActiveRecord
    */
   public function existeUsuario()
   {
-    $query = "SELECT * FROM " . self::$tabla . " WHERE email='" . $this->email . "' LIMIT 1";
-    $resultado = self::$db->query($query);
+    $stmt = self::$db->prepare(
+      "SELECT id FROM " . self::$tabla . " WHERE email = ? LIMIT 1"
+    );
+    $stmt->bind_param('s', $this->email);
+    $stmt->execute();
+    $resultado = $stmt->get_result();
 
     if ($resultado->num_rows) {
-      self::$alertas['error'][] = 'El usuario ya esta registrado';
+      self::$alertas['error'][] = 'El usuario ya está registrado';
     }
+
     return $resultado;
   }
 
@@ -111,7 +116,6 @@ class Usuario extends ActiveRecord
 
 
   // PARCIALES
-  //
   // parcial # validarEMAIL
   public function validarEmail()
   {
@@ -129,7 +133,7 @@ class Usuario extends ActiveRecord
       return;
     }
 
-    # +7 caracteres y contendra minúsculas / mayúscula / números / símbolos (no alfanumérico)
+    # +7 caracteres y contendrá minúsculas / mayúscula / números / símbolos (no alfanumérico)
     $regex = '/^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{7,}$/';
 
     if (!preg_match($regex, $this->password)) {
@@ -158,6 +162,7 @@ class Usuario extends ActiveRecord
   // parcial # crearTOKEN
   public function crearToken()
   {
-    $this->token = uniqid();
+    // $this->token = uniqid();
+    $this->token = bin2hex(random_bytes(16));
   }
 }

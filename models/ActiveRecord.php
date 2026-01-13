@@ -9,45 +9,71 @@ class ActiveRecord
   protected static $tabla = '';
   protected static $columnasDB = [];
 
-  // el ID explícitamente
+  // el ID del registro
   public $id;
 
-  // alertas y mensajes
+  //  mensajes de alerta y validacion
   protected static $alertas = [];
 
-  // conexión a la BD
+  /**
+   * conexion a la BD - mysqli
+   * @param mixed $database
+   * @return void
+   */
   public static function setDB($database)
   {
     self::$db = $database;
   }
 
-  // setter - alerta
+  //
+  // === ALERTAS / VALIDACIONES ===
+
+  /**
+   * setter - mensaje de alerta
+   * @param string $tipo Tipo de alerta ('error' 'success' ..)
+   * @param string $mensaje Mensaje de alerta
+   * @return void
+   */
   public static function setAlerta($tipo, $mensaje)
   {
     static::$alertas[$tipo][] = $mensaje;
   }
 
-  // getters - alertas
+  /**
+   * getters - alertas registradas
+   * @return array<string[]>
+   */
   public static function getAlertas()
   {
     return static::$alertas;
   }
 
-  // validacion - alertas
+  /**
+   * validacio - alertas - atributos
+   * ..limpia alertas y devuelve un array vacio
+   * @return array<string[]>
+   */
   public function validar()
   {
     static::$alertas = [];
     return static::$alertas;
   }
 
-  // consulta SQL para objeto en Memoria (Active Record)
+  //
+  // === CONSULTAS ===
+
+  /**
+   * consulta SQL + conversion a objetos
+   * @param string $query Consulta SQL
+   * @return array Array de objetos del modelo
+   */
   public static function consultarSQL($query)
   {
-    // consulta + verificacion error
+    // consulta + verificación error
     $resultado = self::$db->query($query);
     if (!$resultado) return [];
 
-    // iterar los resultados
+    // iterar resultados a oo
     $array = [];
     while ($registro = $resultado->fetch_assoc()) {
       $array[] = static::crearObjeto($registro);
@@ -57,7 +83,11 @@ class ActiveRecord
     return $array;
   }
 
-  // crea objeto en memoria === al de la BD
+  /**
+   *crea objeto del modelo === al de la BD
+   * @param array $registro Registro asociativo de la BD
+   * @return static Objeto del modelo
+   */
   protected static function crearObjeto($registro)
   {
     $objeto = new static();
@@ -70,7 +100,13 @@ class ActiveRecord
     return $objeto;
   }
 
-  // identificar y unir los atributos de la BD
+  //
+  // === MANEJO DE ATRIBUTOS ===
+
+  /**
+   * devuelve union de atributos del modelo (columnas de la BD, sin ID)
+   * @return array
+   */
   public function atributos()
   {
     $atributos = [];
@@ -83,7 +119,10 @@ class ActiveRecord
     return $atributos;
   }
 
-  // sanitizar datos antes de guardar en la BD
+  /**
+   * sanitizar atributos antes de guardar en la BD
+   * @return array
+   */
   public function sanitizarAtributos()
   {
     $atributos = $this->atributos();
@@ -96,7 +135,11 @@ class ActiveRecord
     return $sanitizado;
   }
 
-  // sincroniza BD con Objetos en memoria
+  /**
+   * sincroniza los atributos del objeto con un array de datos
+   * @param array $args Datos a sincronizar
+   * @return void
+   */
   public function sincronizar($args = [])
   {
     foreach ($args as $key => $value) {
@@ -106,7 +149,13 @@ class ActiveRecord
     }
   }
 
-  // registros - CRUD
+  //
+  // === CRUD (CREATE / UPDATE / DELETE) ===
+
+  /**
+   * guarda registro actual
+   * @return array|bool Resultado de la operacion
+   */
   public function guardar()
   {
     $resultado = '';
@@ -120,7 +169,109 @@ class ActiveRecord
     return $resultado;
   }
 
-  // obtener TODOS los registros
+  /**
+   * crea un nuevo registro  en BD
+   * @return array Resultado y nuevo ID
+   */
+  public function crear()
+  {
+    $atributos = $this->sanitizarAtributos();
+    $columnas = array_keys($atributos);
+    $valores = array_values($atributos);
+
+    // placeholders '?'
+    $placeholders = implode(', ', array_fill(0, count($columnas), '?'));
+    $tipos = str_repeat('s', count($columnas)); // se asume que todos son string 's'
+
+    // consulta preparada
+    $query = "INSERT INTO " . static::$tabla . " (" . implode(', ', $columnas) . ") VALUES (" . $placeholders . ")";
+    $stmt = self::$db->prepare($query);
+
+    // enlazar parametros
+    $params = array_merge([$tipos], $valores);
+    $refs = [];
+    foreach ($params as $key => $value) {
+      $refs[$key] = &$params[$key];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $refs);
+
+    // ejecutar
+    $resultado = $stmt->execute();
+
+    return [
+      'resultado' => $resultado,
+      'id' => self::$db->insert_id
+    ];
+  }
+
+  /**
+   * actualiza el registro existente
+   * @return bool
+   */
+  public function actualizar()
+  {
+    $atributos = $this->sanitizarAtributos();
+    $valores_set = [];
+    $valores = [];
+    $tipos = '';
+
+    foreach ($atributos as $key => $value) {
+      $valores_set[] = "{$key} = ?";
+      $valores[] = $value;
+      $tipos .= 's'; // se asume string
+    }
+
+    // agregamos el ID al final en  clausula WHERE y de tipo 'i' (int)
+    $valores[] = $this->id;
+    $tipos .= 'i';
+
+    // consulta preparada
+    $query = "UPDATE " . static::$tabla . " SET " . implode(', ', $valores_set);
+    $query .= " WHERE id = ? LIMIT 1";
+    $stmt = self::$db->prepare($query);
+
+    // enlazar parametros
+    $params = array_merge([$tipos], $valores);
+    $refs = [];
+    foreach ($params as $key => $value) {
+      $refs[$key] = &$params[$key];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $refs);
+
+    // ejecutar
+    $resultado = $stmt->execute();
+
+    return $resultado;
+  }
+
+  /**
+   * elimina registro actual por ID de la BD
+   * @return bool
+   */
+  public function eliminar()
+  {
+    // sanear y validar el ID
+    $id = filter_var($this->id, FILTER_VALIDATE_INT);
+    if (!$id) return false;
+
+    // preparar y ejecutar
+    $query = "DELETE FROM " . static::$tabla . " WHERE id = ? LIMIT 1";
+    $stmt = self::$db->prepare($query);
+    $stmt->bind_param('i', $id);
+    $resultado = $stmt->execute();
+
+    $stmt->close();
+
+    return $resultado;
+  }
+
+  //
+  // === CONSULTAS RAPIDAS ===
+
+  /**
+   * obtiene todos los registros
+   * @return array
+   */
   public static function all()
   {
     $query = "SELECT * FROM " . static::$tabla . " ORDER BY id DESC";
@@ -128,7 +279,11 @@ class ActiveRecord
     return $resultado;
   }
 
-  // obtener un registro Por su ID
+  /**
+   * obtener un registro por su ID
+   * @param int $id
+   * @return static|null
+   */
   public static function find($id)
   {
     // sanear y validar el ID
@@ -139,7 +294,7 @@ class ActiveRecord
 
     // preparar y ejecutar
     $stmt = self::$db->prepare($query);
-    $stmt->bind_param('i', $id); // 'i' para integer
+    $stmt->bind_param('i', $id); // 'i' === integer
     $stmt->execute();
     $resultado = $stmt->get_result();
 
@@ -156,7 +311,11 @@ class ActiveRecord
     return null;
   }
 
-  // obtener N registros
+  /**
+   * obtener N registros
+   * @param int $limite
+   * @return array
+   */
   public static function get($limite)
   {
     // sanear y validar el limite
@@ -167,7 +326,7 @@ class ActiveRecord
 
     // preparar y ejecutar
     $stmt = self::$db->prepare($query);
-    $stmt->bind_param('i', $limite); // 'i' para integer
+    $stmt->bind_param('i', $limite); // 'i' === integer
     $stmt->execute();
     $resultado = $stmt->get_result();
 
@@ -178,10 +337,16 @@ class ActiveRecord
     }
     $stmt->close();
 
-    return array_shift($array);
+    return array_shift($array);  // devolver solo el primer objeto
+    // return $array;
   }
 
-  // buscar $valor en la $columna
+  /**
+   * busca registro por columna y valor
+   * @param string $columna
+   * @param mixed $valor
+   * @return static|null
+   */
   public static function where($columna, $valor)
   {
     // validacion de columna
@@ -190,9 +355,8 @@ class ActiveRecord
     }
 
     $query = "SELECT * FROM " . static::$tabla . " WHERE " . $columna . " = ?";
-
     // tipo de bind
-    $tipo = is_int($valor) ? 'i' : 's'; // asumir 's' string si no es int
+    $tipo = is_int($valor) ? 'i' : 's'; // asumir como string 's'
 
     // preparar y ejecutar
     $stmt = self::$db->prepare($query);
@@ -212,8 +376,12 @@ class ActiveRecord
     return null;
   }
 
-
-  // buscar TODOS los registros que coinciden con $valor en $columna -
+  /**
+   * busca todos los registros que coinciden con columna y valor
+   * @param string $columna
+   * @param mixed $valor
+   * @return array
+   */
   public static function whereAll(string $columna, $valor): array
   {
     // validacion de columna
@@ -240,97 +408,5 @@ class ActiveRecord
     $stmt->close();
 
     return $array;
-  }
-
-
-  // crea un nuevo registro
-  public function crear()
-  {
-    $atributos = $this->sanitizarAtributos();
-    $columnas = array_keys($atributos);
-    $valores = array_values($atributos);
-
-    // placeholders '?'
-    $placeholders = implode(', ', array_fill(0, count($columnas), '?'));
-    $tipos = str_repeat('s', count($columnas)); // se asume que todos son string 's'
-
-    // consulta preparada
-    $query = "INSERT INTO " . static::$tabla . " (" . implode(', ', $columnas) . ") VALUES (" . $placeholders . ")";
-
-    $stmt = self::$db->prepare($query);
-
-    // enlazar parametros
-    $params = array_merge([$tipos], $valores);
-    $refs = [];
-    foreach ($params as $key => $value) {
-      $refs[$key] = &$params[$key];
-    }
-    call_user_func_array([$stmt, 'bind_param'], $refs);
-
-    // ejecutar
-    $resultado = $stmt->execute();
-
-    // retorno
-    return [
-      'resultado' => $resultado,
-      'id' => self::$db->insert_id
-    ];
-  }
-
-  // actualizar el registro
-  public function actualizar()
-  {
-    $atributos = $this->sanitizarAtributos();
-    $valores_set = [];
-    $valores = [];
-    $tipos = '';
-
-    foreach ($atributos as $key => $value) {
-      $valores_set[] = "{$key} = ?";
-      $valores[] = $value;
-      $tipos .= 's'; // se asume string
-    }
-
-    // agregamos el ID al final para la clausula WHERE y su tipo 'i' (int)
-    $valores[] = $this->id;
-    $tipos .= 'i';
-
-    // consulta preparada
-    $query = "UPDATE " . static::$tabla . " SET " . implode(', ', $valores_set);
-    $query .= " WHERE id = ? LIMIT 1";
-
-    $stmt = self::$db->prepare($query);
-
-    // enlazar parametros
-    $params = array_merge([$tipos], $valores);
-    $refs = [];
-    foreach ($params as $key => $value) {
-      $refs[$key] = &$params[$key];
-    }
-    call_user_func_array([$stmt, 'bind_param'], $refs);
-
-    // ejecutar
-    $resultado = $stmt->execute();
-
-    return $resultado;
-  }
-
-  // eliminar un registro por su ID
-  public function eliminar()
-  {
-    // sanear y validar el ID
-    $id = filter_var($this->id, FILTER_VALIDATE_INT);
-    if (!$id) return false;
-
-    $query = "DELETE FROM " . static::$tabla . " WHERE id = ? LIMIT 1";
-
-    // preparar y ejecutar
-    $stmt = self::$db->prepare($query);
-    $stmt->bind_param('i', $id);
-    $resultado = $stmt->execute();
-
-    $stmt->close();
-
-    return $resultado;
   }
 }

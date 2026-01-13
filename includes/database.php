@@ -8,8 +8,8 @@ $name = $_ENV['DB_NAME'] ?? '';
 $db = new mysqli($host, $user, $pass, $name);
 
 if (!$db) {
-    echo "<b>error de conexion a la base de datos</b><br />";
-    die("codigo ERRNO >> " . mysqli_connect_errno() .
-        "<br />descripcion ERROR >> " . mysqli_connect_error());
+    echo "<b>error de conexión a la base de datos</b><br />";
+    die("código ERRNO >> " . mysqli_connect_errno() .
+        "<br />description ERROR >> " . mysqli_connect_error());
 }
 mysqli_set_charset($db, "utf8");

@@ -2,6 +2,7 @@
 
 namespace Controllers;
 
+use Classes\Session;
 use Classes\Email;
 use Model\Usuario;
 use MVC\Router;
@@ -32,23 +33,23 @@ class LoginController
         if ($resultado->num_rows) {
           $alertas = Usuario::getAlertas(); // error
         } else {
-          // 1 hashea password + crea token
+          // hashea password + crea token
           $usuario->hashPassword();
           $usuario->crearToken();
 
-          // 2 alta de usuario (Token y datos)
+          // alta de usuario (Token y datos)
           $resultado = $usuario->guardar();
 
           if ($resultado) {
-            // 3 envio de Email
+            // envió de Email
             // TO
             $email = new Email($usuario->email, $usuario->nombre, $usuario->token);
-            // FROM - enviar email de confirmacion
+            // FROM - enviar email de confirmation
             $fromEmail = $_ENV['EMAIL_APP_DOMAIN'] ?: 'test.acount@test.test'; // test credentials - email address
             $fromName = $_ENV['EMAIL_APP_NAME'] ?: 'ca2.test.test'; // test credentials - username in email
             $email->enviarConfirmacion($fromEmail, $fromName);
 
-            // 4 flag de registro + redireccion
+            // flag de registro + redirection
             header('Location: /alta-mensaje');
           }
         }
@@ -96,6 +97,7 @@ class LoginController
 
 
 
+
   /**
    * LOGIN session
    * @param Router $router
@@ -112,24 +114,16 @@ class LoginController
       // verificar usuario > password >..> confirmar
       if (empty($alertas)) {
 
-        // la siguente linea @var corrige/silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
+        // la siguiente linea @var corrige o silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
         /** @var \Model\Usuario $usuario */
         $usuario = Usuario::where('email', $auth->email);
 
         if ($usuario) {    //existe email?
           if ($usuario->comprobarPasswordAndVerificado($auth->password)) {
+            Session::login($usuario);
 
-            $_SESSION['id'] = $usuario->id;
-            $_SESSION['nombre'] = $usuario->nombre;
-            $_SESSION['emai'] = $usuario->email;
-            $_SESSION['login'] = true;
-
-            if ($usuario->codigoRol === '1') { // usuario ADMIN ??
-              $_SESSION['admin'] = $usuario->codigoRol ?? null;
-              header('Location: /admin');
-            } else {
-              header('Location: /accesos');
-            }
+            header('Location: /accesos');
+            exit;
           }
         } else {
           Usuario::setAlerta('error', 'Usuario no encontrado');
@@ -142,8 +136,6 @@ class LoginController
       'alertas' => $alertas,
     ]);
   }
-
-
 
   /**
    * OLVIDE cuenta.. reset password
@@ -161,7 +153,7 @@ class LoginController
 
       if (empty($alertas)) {
 
-        // la siguente linea @var corrige/silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
+        // la siguiente linea @var corrige/silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
         /** @var \Model\Usuario $usuario */
         $usuario = Usuario::where('email', $auth->email);
 
@@ -171,15 +163,15 @@ class LoginController
           $usuario->crearToken();
           $usuario->guardar();
 
-          // envio de Email
+          // envió de Email
           // TO
           $email = new Email($usuario->email, $usuario->nombre, $usuario->token);
-          // FROM - enviar email de confirmacion
+          // FROM - enviar email de confirmation
           $fromEmail = $_ENV['EMAIL_APP_DOMAIN'] ?: 'test.acount@test.test'; // test credentials - email address
           $fromName = $_ENV['EMAIL_APP_NAME'] ?: 'ca2.test.test'; // test credentials - username in email
           $email->enviarInstrucciones($fromEmail, $fromName);
 
-          Usuario::setAlerta('exito', 'Revisa tu email');
+          Usuario::setAlerta(tipo: 'exito', mensaje: 'Revisa tu email');
         } else {
           Usuario::setAlerta('error', 'La cuenta no existe o no esta confirmada');
         }
@@ -193,7 +185,7 @@ class LoginController
   }
 
   /**
-   * RECUPERAR cuenta.. validacion password
+   * RECUPERAR cuenta.. validación password
    * @param Router $router
    * @return void
    */
@@ -204,10 +196,10 @@ class LoginController
 
     $token = s($_GET['token']);
 
-    // la siguente linea @var corrige/silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
+    // la siguiente linea @var corrige/silencia el error del linter para que mire en la clase hija Usuario en vez del padre ActiveRecord
     /** @var \Model\Usuario $usuario */
     $usuario = Usuario::where('token', $token);
-    // debuguear($usuario->email);
+    // debugger($usuario->email);
 
     if (empty($usuario)) {
       Usuario::setAlerta('error', 'Token no valido');
@@ -219,7 +211,7 @@ class LoginController
 
       $alertas = $password->validarPassword();
 
-      // asignacion + hash - token >..> Objeto >..> guardar()
+      // asignación + hash - token >..> Objeto >..> guardar()
       if (empty($alertas)) {
         $usuario->password = $password->password;
         $usuario->hashPassword();
@@ -241,19 +233,14 @@ class LoginController
   }
 
 
-
   /**
    * LOGOUT session
    * @return void
    */
   public function logout()
   {
-    if (!isset($_SESSION)) {
-      session_start();
-    }
-
-    $_SESSION = [];
-    session_destroy();
+    Session::logout();
     header('Location: /');
+    exit;
   }
 }

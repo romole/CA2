@@ -21,40 +21,17 @@ function debuguear($variable, $out = true)
 
 
 // Escapa / Sanitizar el HTML
+// function s($html): string
+// {
+//   $s = trim($html);
+//   $s = stripslashes($html);
+
+//   $s = htmlspecialchars($html);
+//   return $s;
+// }
 function s($html): string
 {
-  $s = trim($html);
-  $s = stripslashes($html);
-
-  $s = htmlspecialchars($html);
-  return $s;
-}
-
-// verifica autenticado de usuario
-function isAuth()
-{
-  if (!isset($_SESSION)) {
-    session_start();
-  }
-
-  if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-    header('Location: /');
-    exit();
-  }
-  return true;
-}
-
-// verifica autenticado de admisnistrador
-function isAdmin()
-{
-  return isset($_SESSION['admin']) && $_SESSION['admin'] === '1';
-}
-
-// verifica autenticado y redirigir si NO es administrador
-function isAdminOrRedirect(string $path = '/')
-{
-  if (!isAdmin()) {
-    header("Location: $path");
-    exit();
-  }
+  $html = trim($html);
+  $html = stripslashes($html);
+  return htmlspecialchars($html, ENT_QUOTES, 'UTF-8');
 }
