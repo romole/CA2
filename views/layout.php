@@ -3,11 +3,10 @@ require_once __DIR__ . '/templates/head.php';
 ?>
 
 <div class="container">
-  <?php echo $contenido; ?>
+  <?= $contenido; ?>
 </div>
 
 <?php
 echo $script ?? '';
-
 require_once __DIR__ . '/templates/footer.php';
 ?>
